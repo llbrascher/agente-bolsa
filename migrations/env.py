@@ -1,8 +1,7 @@
-import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import create_engine, pool
 
 from app.config import settings
 from app.database import Base
@@ -15,9 +14,17 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _sync_url(url: str) -> str:
+    """Converte URL async para sync (Alembic usa driver síncrono)."""
+    return (
+        url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+           .replace("sqlite+aiosqlite://", "sqlite:///")
+    )
+
+
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=_sync_url(settings.database_url),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -26,20 +33,18 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def _run_sync_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-async def run_migrations_online() -> None:
-    connectable = create_async_engine(settings.database_url)
-    async with connectable.connect() as connection:
-        await connection.run_sync(_run_sync_migrations)
-    await connectable.dispose()
+def run_migrations_online() -> None:
+    connectable = create_engine(
+        _sync_url(settings.database_url),
+        poolclass=pool.NullPool,
+    )
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    run_migrations_online()
