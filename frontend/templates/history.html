@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Histórico — Agente Bolsa{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Histórico de Relatórios</h1>
+
+<div class="card">
+  {% if reports %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Tickers</th>
+          <th>Origem</th>
+          <th>Status</th>
+          <th>Fontes com falha</th>
+          <th>Duração</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td style="color:var(--muted); font-size:12px; white-space:nowrap">
+            {{ r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '—' }}
+          </td>
+          <td>{{ r.tickers | join(', ') }}</td>
+          <td style="color:var(--muted)">{{ r.triggered_by }}</td>
+          <td>
+            {% if r.status == 'success' %}
+              <span class="badge badge-green">✓ sucesso</span>
+            {% elif r.status == 'partial' %}
+              <span class="badge badge-yellow">⚠ parcial</span>
+            {% else %}
+              <span class="badge badge-red">✗ erro</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--muted); font-size:12px">
+            {{ r.sources_failed | join(', ') if r.sources_failed else '—' }}
+          </td>
+          <td style="color:var(--muted)">
+            {{ r.duration_seconds ~ 's' if r.duration_seconds is not none else '—' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">Nenhum relatório enviado ainda.<br>
+    <a href="/" style="color:var(--accent)">Disparar o primeiro →</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

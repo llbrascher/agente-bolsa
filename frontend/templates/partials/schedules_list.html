@@ -1,0 +1,52 @@
+{% if schedules %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Horário</th>
+        <th>Rótulo</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in schedules %}
+      <tr>
+        <td><strong>{{ '%02d:%02d' % (s.hour, s.minute) }}</strong></td>
+        <td style="color:var(--muted)">{{ s.label or '—' }}</td>
+        <td>
+          {% if s.active %}
+            <span class="badge badge-green"><span class="dot dot-green"></span> Ativo</span>
+          {% else %}
+            <span class="badge badge-red"><span class="dot dot-red"></span> Inativo</span>
+          {% endif %}
+        </td>
+        <td style="display:flex; gap:6px">
+          <button class="btn btn-ghost btn-sm btn-icon"
+                  hx-patch="/htmx/schedules/{{ s.id }}/toggle"
+                  hx-target="#schedules-list"
+                  hx-swap="innerHTML"
+                  title="{{ 'Desativar' if s.active else 'Ativar' }}">
+            {{ '⏸' if s.active else '▶' }}
+          </button>
+          <button class="btn btn-danger btn-sm btn-icon"
+                  hx-delete="/htmx/schedules/{{ s.id }}"
+                  hx-target="#schedules-list"
+                  hx-swap="innerHTML"
+                  hx-confirm="Remover horário {{ '%02d:%02d' % (s.hour, s.minute) }}?"
+                  title="Remover">
+            🗑
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">Nenhum horário configurado.</div>
+{% endif %}
+
+{% if max_reached %}
+<p style="color:var(--yellow); font-size:12px; margin-top:10px">⚠ Limite de 4 horários atingido.</p>
+{% endif %}

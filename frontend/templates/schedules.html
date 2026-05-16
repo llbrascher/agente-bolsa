@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Horários — Agente Bolsa{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Horários</h1>
+
+<div class="card">
+  <div class="card-title">Adicionar horário</div>
+  {% if max_reached %}
+  <div class="toast toast-err">Limite de 4 horários atingido. Remova um para adicionar outro.</div>
+  {% else %}
+  <form hx-post="/htmx/schedules"
+        hx-target="#schedules-list"
+        hx-swap="innerHTML"
+        hx-on::after-request="this.reset()">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Hora</label>
+        <input type="number" name="hour" min="0" max="23" placeholder="9" required>
+      </div>
+      <div class="form-group">
+        <label>Minuto</label>
+        <input type="number" name="minute" min="0" max="59" placeholder="0" value="0">
+      </div>
+      <div class="form-group">
+        <label>Rótulo (opcional)</label>
+        <input type="text" name="label" placeholder="Abertura" style="width:180px">
+      </div>
+      <button type="submit" class="btn btn-primary" style="align-self:flex-end">+ Adicionar</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-title">Horários configurados</div>
+  <p style="color:var(--muted); font-size:12px; margin-bottom:14px">
+    Fuso horário: <strong>America/Sao_Paulo</strong>. Máximo de 4 horários por dia.
+  </p>
+  <div id="schedules-list">
+    {% include "partials/schedules_list.html" %}
+  </div>
+</div>
+{% endblock %}

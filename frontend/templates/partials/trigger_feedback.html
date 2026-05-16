@@ -1,0 +1,15 @@
+{% if dispatched %}
+<div class="toast toast-ok">
+  ✓ Relatório disparado para {{ count }} empresa{{ 's' if count != 1 else '' }}. Aguarde o e-mail.
+</div>
+{% else %}
+<div class="toast toast-err">
+  ✗ Nenhuma empresa ativa cadastrada.
+</div>
+{% endif %}
+<button class="btn btn-ghost btn-sm" style="margin-top:8px"
+        hx-post="/htmx/trigger"
+        hx-target="#trigger-feedback"
+        hx-swap="innerHTML">
+  Disparar novamente
+</button>

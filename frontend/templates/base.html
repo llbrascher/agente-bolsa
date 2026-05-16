@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Agente Bolsa{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <h1>📈 Agente Bolsa</h1>
+    <span>Monitor de Ações B3</span>
+  </div>
+  <a href="/"         class="{% if page == 'dashboard' %}active{% endif %}"><span class="icon">⊞</span> Dashboard</a>
+  <a href="/empresas" class="{% if page == 'empresas'  %}active{% endif %}"><span class="icon">🏢</span> Empresas</a>
+  <a href="/horarios" class="{% if page == 'horarios'  %}active{% endif %}"><span class="icon">🕐</span> Horários</a>
+  <a href="/historico" class="{% if page == 'historico' %}active{% endif %}"><span class="icon">📋</span> Histórico</a>
+  <a href="/docs"     style="margin-top:auto"><span class="icon">⚙</span> API Docs</a>
+</nav>
+
+<main class="main">
+  {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>

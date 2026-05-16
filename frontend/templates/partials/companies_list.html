@@ -1,0 +1,48 @@
+{% if companies %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Nome</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in companies %}
+      <tr>
+        <td><strong>{{ c.ticker }}</strong></td>
+        <td>{{ c.name }}</td>
+        <td>
+          {% if c.active %}
+            <span class="badge badge-green"><span class="dot dot-green"></span> Ativa</span>
+          {% else %}
+            <span class="badge badge-red"><span class="dot dot-red"></span> Inativa</span>
+          {% endif %}
+        </td>
+        <td style="display:flex; gap:6px">
+          <button class="btn btn-ghost btn-sm btn-icon"
+                  hx-patch="/htmx/companies/{{ c.id }}/toggle"
+                  hx-target="#companies-list"
+                  hx-swap="innerHTML"
+                  title="{{ 'Desativar' if c.active else 'Ativar' }}">
+            {{ '⏸' if c.active else '▶' }}
+          </button>
+          <button class="btn btn-danger btn-sm btn-icon"
+                  hx-delete="/htmx/companies/{{ c.id }}"
+                  hx-target="#companies-list"
+                  hx-swap="innerHTML"
+                  hx-confirm="Remover {{ c.ticker }}?"
+                  title="Remover">
+            🗑
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">Nenhuma empresa cadastrada ainda.</div>
+{% endif %}

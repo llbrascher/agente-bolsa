@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Empresas — Agente Bolsa{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Empresas</h1>
+
+<div class="card">
+  <div class="card-title">Adicionar empresa</div>
+  <form hx-post="/htmx/companies"
+        hx-target="#companies-list"
+        hx-swap="innerHTML"
+        hx-on::after-request="this.reset()">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ticker</label>
+        <input type="text" name="ticker" placeholder="PETR4" required maxlength="10"
+               style="width:110px; text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Nome da empresa</label>
+        <input type="text" name="name" placeholder="Petrobras" required style="width:220px">
+      </div>
+      <div class="form-group">
+        <label>Observação (opcional)</label>
+        <input type="text" name="notes" placeholder="Ex: posição longa" style="width:200px">
+      </div>
+      <button type="submit" class="btn btn-primary" style="align-self:flex-end">+ Adicionar</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">Empresas monitoradas</div>
+  <div id="companies-list">
+    {% include "partials/companies_list.html" %}
+  </div>
+</div>
+{% endblock %}

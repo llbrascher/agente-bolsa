@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agente-bolsa"
+version = "0.1.0"
+description = "Agente de monitoramento de ações B3 com IA"
+requires-python = ">=3.12"
+dependencies = [
+    # Web
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.12",
+    # HTMX é servido via CDN nos templates, sem pacote Python
+
+    # Config
+    "pydantic-settings>=2.6",
+    "python-dotenv>=1.0",
+
+    # ORM / Banco
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "aiosqlite>=0.20",
+    "asyncpg>=0.30",
+
+    # Scheduler
+    "apscheduler>=3.10",
+
+    # HTTP
+    "httpx>=0.28",
+
+    # Fontes de dados
+    "feedparser>=6.0",
+    "tavily-python>=0.5",
+    "praw>=7.8",
+    "google-api-python-client>=2.154",
+    "youtube-transcript-api>=0.6",
+    "pytrends>=4.9",
+
+    # IA + E-mail
+    "anthropic>=0.40",
+    "resend>=2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+    "ruff>=0.8",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
