@@ -114,6 +114,7 @@ class SummaryResult:
     institutional_summary: str
     retail_summary: str
     full_text: str
+    sentiment: str = "neutro"  # "positivo", "neutro" ou "negativo"
 
 
 async def summarize_company(data: CompanyData) -> SummaryResult:
@@ -156,6 +157,7 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
 Gere um resumo seguindo EXATAMENTE esta estrutura JSON:
 
 {{
+  "sentiment": "<uma palavra: positivo, neutro ou negativo — avaliação geral do conjunto de notícias para o acionista>",
   "institutional_summary": "<2-4 parágrafos analisando notícias e busca Tavily. Destaque: o que move o preço, resultados, fatos relevantes, riscos.>",
   "{retail_instruction}"
 }}
@@ -179,6 +181,8 @@ Responda APENAS com o JSON, sem markdown, sem texto fora do JSON."""
 
     institutional = parsed.get("institutional_summary", "Resumo indisponível.")
     retail = parsed.get("retail_summary", "")
+    raw_sentiment = parsed.get("sentiment", "neutro").lower().strip()
+    sentiment = raw_sentiment if raw_sentiment in {"positivo", "neutro", "negativo"} else "neutro"
 
     full_text = f"{quote_line}\n\n{institutional}"
     if retail:
@@ -191,4 +195,5 @@ Responda APENAS com o JSON, sem markdown, sem texto fora do JSON."""
         institutional_summary=institutional,
         retail_summary=retail,
         full_text=full_text,
+        sentiment=sentiment,
     )

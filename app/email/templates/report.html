@@ -85,6 +85,33 @@
       color: #92400e;
     }
     .warnings ul { padding-left: 16px; margin-top: 4px; }
+
+    .sentiment-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .sentiment-positivo {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      color: #15803d;
+    }
+    .sentiment-neutro {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      color: #475569;
+    }
+    .sentiment-negativo {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+    }
+    .sentiment-icon { font-size: 18px; }
   </style>
 </head>
 <body>
@@ -98,6 +125,20 @@
     {% for s in summaries %}
     <div class="company-card">
       <div class="company-name">{{ s.company_name }} ({{ s.ticker }})</div>
+
+      {% if s.sentiment == 'positivo' %}
+      <div class="sentiment-bar sentiment-positivo">
+        <span class="sentiment-icon">🟢</span> Tendência positiva pelas notícias
+      </div>
+      {% elif s.sentiment == 'negativo' %}
+      <div class="sentiment-bar sentiment-negativo">
+        <span class="sentiment-icon">🔴</span> Tendência negativa pelas notícias
+      </div>
+      {% else %}
+      <div class="sentiment-bar sentiment-neutro">
+        <span class="sentiment-icon">⚪</span> Tendência neutra pelas notícias
+      </div>
+      {% endif %}
 
       <div class="quote-line">{{ s.quote_line }}</div>
 
