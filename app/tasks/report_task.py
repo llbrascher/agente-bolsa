@@ -16,7 +16,6 @@ from app.ai.summarizer import CompanyData, summarize_company
 from app.email.sender import send_report
 from app.models.report import Report
 from app.sources.brapi import BrapiSource
-from app.sources.cvm import CVMSource
 from app.sources.google_news import GoogleNewsSource
 from app.sources.trends import GoogleTrendsSource
 from app.sources.reddit import RedditSource
@@ -31,7 +30,6 @@ INSTITUTIONAL_SOURCES = [
     BrapiSource(),
     GoogleNewsSource(),
     TavilySource(),
-    CVMSource(),
     SubstackSource(),
 ]
 
@@ -55,7 +53,6 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
     reddit_items: list[dict] = []
     youtube_items: list[dict] = []
     trends_data: dict | None = None
-    cvm_items: list[dict] = []
     substack_items: list[dict] = []
     failed: list[str] = []
 
@@ -76,8 +73,6 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
                 youtube_items = result.data.get("items", [])
             case "google_trends":
                 trends_data = result.data
-            case "cvm":
-                cvm_items = result.data.get("items", [])
             case "substack":
                 substack_items = result.data.get("items", [])
 
@@ -90,7 +85,6 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
         reddit_items=reddit_items,
         youtube_items=youtube_items,
         trends_data=trends_data,
-        cvm_items=cvm_items,
         substack_items=substack_items,
         failed_sources=failed,
     ), failed

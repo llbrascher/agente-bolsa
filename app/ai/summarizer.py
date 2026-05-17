@@ -77,17 +77,6 @@ def _fmt_trends(data: dict | None) -> str:
     return "\n".join(lines) if lines else "Sem dados."
 
 
-def _fmt_cvm(items: list[dict]) -> str:
-    if not items:
-        return "Nenhum fato relevante nas últimas 24h."
-    lines = []
-    for it in items:
-        date = it.get("date", "")[:10]
-        url = it.get("url", "")
-        lines.append(f"• [{date}] {it['title']}" + (f" — {url}" if url else ""))
-    return "\n".join(lines)
-
-
 def _fmt_substack(items: list[dict]) -> str:
     if not items:
         return "Nenhuma menção em newsletters monitoradas."
@@ -109,7 +98,6 @@ class CompanyData:
     reddit_items: list[dict] = field(default_factory=list)
     youtube_items: list[dict] = field(default_factory=list)
     trends_data: dict | None = None
-    cvm_items: list[dict] = field(default_factory=list)
     substack_items: list[dict] = field(default_factory=list)
     failed_sources: list[str] = field(default_factory=list)
 
@@ -144,9 +132,6 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
 
 ### Cotação
 {quote_line}
-
-### Fatos Relevantes CVM (últimas 24h)
-{_fmt_cvm(data.cvm_items)}
 
 ### Notícias institucionais (Google News)
 {_fmt_news(data.news)}
