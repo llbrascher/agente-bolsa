@@ -1,0 +1,32 @@
+{% for q in quotes %}
+{% set change = q.change_pct or 0 %}
+{% set positive = change >= 0 %}
+<div class="quote-card">
+  <div class="quote-card-header">
+    {% if q.logo_url %}
+    <img src="{{ q.logo_url }}" alt="{{ q.ticker }}" class="quote-logo"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+    {% endif %}
+    <div class="quote-logo-fallback" {% if q.logo_url %}style="display:none"{% endif %}>
+      {{ q.ticker[0] }}
+    </div>
+    <div class="quote-card-info">
+      <div class="quote-ticker">{{ q.ticker }}</div>
+      <div class="quote-name">{{ q.short_name }}</div>
+    </div>
+  </div>
+  <div class="quote-card-price">
+    {% if q.price %}
+    <div class="quote-price">R$ {{ "%.2f"|format(q.price) }}</div>
+    <div class="quote-change {{ 'positive' if positive else 'negative' }}">
+      {{ "▲" if positive else "▼" }}
+      {{ "%+.2f"|format(change) }}%
+    </div>
+    {% else %}
+    <div class="quote-price" style="color:var(--muted); font-size:13px">indisponível</div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<p style="color:var(--muted); font-size:13px">Nenhuma empresa ativa.</p>
+{% endfor %}

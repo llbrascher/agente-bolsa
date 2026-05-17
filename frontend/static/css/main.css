@@ -17,7 +17,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
@@ -169,7 +169,102 @@ input[type="number"] { width: 80px; }
 /* ── Empty state ─────────────────────────────────────────────────── */
 .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
 
+/* ── Quote cards ─────────────────────────────────────────────────── */
+.quotes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.quotes-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.quote-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color .15s, transform .15s;
+}
+.quote-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.quote-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quote-logo {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #fff;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.quote-logo-fallback {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.quote-card-info { min-width: 0; }
+.quote-ticker { font-weight: 700; font-size: 14px; }
+.quote-name   { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.quote-card-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.quote-price  { font-size: 18px; font-weight: 700; }
+.quote-change { font-size: 12px; font-weight: 600; }
+.quote-change.positive { color: var(--green); }
+.quote-change.negative { color: var(--red); }
+
+/* ── Nav brand refinement ─────────────────────────────────────────── */
+.nav-brand h1 { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+
+/* ── Stat card accent bar ─────────────────────────────────────────── */
+.stat {
+  border-top: 3px solid var(--accent);
+  transition: transform .15s;
+}
+.stat:hover { transform: translateY(-2px); }
+
 @media (max-width: 640px) {
   .nav { display: none; }
   .main { margin-left: 0; padding: 16px; }
+  .quotes-grid { grid-template-columns: 1fr 1fr; }
 }

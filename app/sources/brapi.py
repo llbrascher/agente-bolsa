@@ -35,4 +35,5 @@ class BrapiSource(SourceBase):
             "market_cap": quote.get("marketCap"),
             "short_name": quote.get("shortName") or company_name,
             "currency": quote.get("currency", "BRL"),
+            "logo_url": quote.get("logourl", ""),
         }

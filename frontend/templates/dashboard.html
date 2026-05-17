@@ -19,6 +19,18 @@
   </div>
 </div>
 
+<div class="card" style="margin-bottom:24px">
+  <div class="card-title">Cotações ao vivo</div>
+  <div class="quotes-grid"
+       hx-get="/htmx/quotes"
+       hx-trigger="load"
+       hx-swap="innerHTML">
+    <div class="quotes-loading">
+      <span class="spinner"></span> Carregando cotações…
+    </div>
+  </div>
+</div>
+
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px">
 
   <div class="card">

@@ -224,6 +224,29 @@ async def htmx_toggle_schedule(
     })
 
 
+# ── Cotações ao vivo (HTMX lazy) ─────────────────────────────────────────────
+
+@router.get("/htmx/quotes", response_class=HTMLResponse)
+async def htmx_quotes(request: Request, db: AsyncSession = Depends(get_db)):
+    import asyncio
+    from app.sources.brapi import BrapiSource
+
+    companies = await _companies(db)
+    active = [c for c in companies if c.active]
+
+    brapi = BrapiSource()
+    results = await asyncio.gather(*[brapi.fetch(c.ticker, c.name) for c in active])
+
+    quotes = []
+    for company, result in zip(active, results):
+        if result.success:
+            quotes.append(result.data)
+        else:
+            quotes.append({"ticker": company.ticker, "short_name": company.name, "price": None, "change_pct": None, "logo_url": ""})
+
+    return resp(request, "partials/quotes_cards.html", {"quotes": quotes})
+
+
 # ── Disparo manual via UI ─────────────────────────────────────────────────────
 
 @router.post("/htmx/trigger", response_class=HTMLResponse)
