@@ -1,12 +1,32 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.company import Company
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
+
+_tickers_cache: list[dict] | None = None
+
+
+@router.get("/tickers")
+async def list_b3_tickers():
+    global _tickers_cache
+    if _tickers_cache is not None:
+        return _tickers_cache
+
+    params = {"token": settings.brapi_token} if settings.brapi_token else {}
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get("https://brapi.dev/api/quote/list", params=params)
+        resp.raise_for_status()
+
+    stocks = resp.json().get("stocks", [])
+    _tickers_cache = [{"ticker": s["stock"], "name": s.get("name", "")} for s in stocks]
+    return _tickers_cache
 
 
 class CompanyIn(BaseModel):

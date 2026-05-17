@@ -9,16 +9,19 @@
   <form hx-post="/htmx/companies"
         hx-target="#companies-list"
         hx-swap="innerHTML"
-        hx-on::after-request="this.reset()">
+        hx-on::after-request="this.reset(); document.getElementById('name').value=''">
     <div class="form-row">
       <div class="form-group">
         <label>Ticker</label>
-        <input type="text" name="ticker" placeholder="PETR4" required maxlength="10"
-               style="width:110px; text-transform:uppercase">
+        <input type="text" id="ticker-input" name="ticker" placeholder="PETR4" required maxlength="10"
+               list="tickers-list" autocomplete="off"
+               style="width:140px; text-transform:uppercase"
+               oninput="onTickerInput(this.value)">
+        <datalist id="tickers-list"></datalist>
       </div>
       <div class="form-group">
         <label>Nome da empresa</label>
-        <input type="text" name="name" placeholder="Petrobras" required style="width:220px">
+        <input type="text" id="name" name="name" placeholder="Petrobras" required style="width:220px">
       </div>
       <div class="form-group">
         <label>Observação (opcional)</label>
@@ -35,4 +38,38 @@
     {% include "partials/companies_list.html" %}
   </div>
 </div>
+
+<script>
+let _tickers = [];
+
+fetch('/api/companies/tickers')
+  .then(r => r.json())
+  .then(data => {
+    _tickers = data;
+    const dl = document.getElementById('tickers-list');
+    data.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.ticker.toUpperCase();
+      opt.label = t.name;
+      dl.appendChild(opt);
+    });
+  })
+  .catch(() => {});
+
+function onTickerInput(val) {
+  const ticker = val.toUpperCase();
+  const match = _tickers.find(t => t.ticker.toUpperCase() === ticker);
+  if (match && match.name) {
+    const nameField = document.getElementById('name');
+    if (!nameField.value || nameField.dataset.auto === 'true') {
+      nameField.value = match.name;
+      nameField.dataset.auto = 'true';
+    }
+  }
+}
+
+document.getElementById('name').addEventListener('input', function() {
+  this.dataset.auto = 'false';
+});
+</script>
 {% endblock %}
