@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.summarizer import CompanyData, summarize_company
+from app.ai.summarizer import CompanyData, summarize_company, futures_search_term
 from app.email.sender import send_report
 from app.models.report import Report
 from app.sources.brapi import BrapiSource
@@ -45,7 +45,10 @@ ALL_SOURCES = INSTITUTIONAL_SOURCES + RETAIL_SOURCES
 
 async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData, list[str]]:
     """Coleta dados de todas as fontes para uma empresa. Nunca lança exceção."""
-    results = await asyncio.gather(*[src.fetch(ticker, company_name) for src in ALL_SOURCES])
+    # Para futuros, usa o termo do ativo subjacente nas buscas textuais (ex: "ouro gold" em vez de "GLDQ26")
+    underlying = futures_search_term(ticker)
+    search_name = underlying if underlying else company_name
+    results = await asyncio.gather(*[src.fetch(ticker, search_name) for src in ALL_SOURCES])
 
     quote = None
     news: list[dict] = []

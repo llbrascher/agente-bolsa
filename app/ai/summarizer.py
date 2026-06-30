@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 import anthropic
@@ -10,12 +11,75 @@ logger = logging.getLogger(__name__)
 
 client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-SYSTEM_PROMPT = """Você é um analista de mercado de capitais brasileiro especializado em ações da B3.
+SYSTEM_PROMPT = """Você é um analista de mercado de capitais brasileiro especializado em ações da B3
+e em commodities e derivativos negociados na B3.
 Seu papel é interpretar dados de cotação, notícias e sentimento de mercado, e produzir um resumo
 claro, objetivo e útil para um investidor de varejo acompanhar suas posições.
 
+Para contratos futuros: analise o ATIVO SUBJACENTE (commodity, índice ou câmbio), não o contrato
+em si. Inclua perspectivas de oferta/demanda, fatores macroeconômicos e impacto cambial quando
+relevante para o investidor brasileiro.
+
 Seja direto. Use linguagem acessível, mas precisa. Não invente informações que não estejam nos dados.
 Se não houver dados suficientes em alguma seção, diga isso claramente."""
+
+# Padrão de ticker futuro da B3: prefixo de letras + código de mês + 2 dígitos do ano
+_FUTURES_RE = re.compile(r'^([A-Z]{2,5})([FGHJKMNQUVXZ])(\d{2})$')
+
+# prefixo → (termo de busca, nome para exibição)
+_FUTURES_MAP: dict[str, tuple[str, str]] = {
+    'GLD':  ('ouro gold mercados',          'Ouro (Gold)'),
+    'OZ':   ('ouro B3',                     'Ouro à vista B3'),
+    'WIN':  ('Ibovespa índice futuro',       'Ibovespa Mini (WIN)'),
+    'IND':  ('Ibovespa índice futuro',       'Ibovespa Índice (IND)'),
+    'WDO':  ('dólar real câmbio futuro',     'Mini Dólar (WDO)'),
+    'DOL':  ('dólar real câmbio futuro',     'Dólar Futuro (DOL)'),
+    'BGI':  ('boi gordo pecuária futuro',    'Boi Gordo (BGI)'),
+    'ICF':  ('café arábica commodity',       'Café Arábica (ICF)'),
+    'CCM':  ('milho commodity grãos',        'Milho (CCM)'),
+    'SJC':  ('soja commodity grãos',         'Soja (SJC)'),
+    'ACF':  ('açúcar commodity',             'Açúcar Cristal (ACF)'),
+    'ETH':  ('etanol combustível',           'Etanol (ETH)'),
+    'ISP':  ('S&P 500 bolsa americana',      'S&P 500 (ISP)'),
+    'EUR':  ('euro câmbio moeda',            'Euro (EUR)'),
+    'GBP':  ('libra câmbio moeda',           'Libra Esterlina (GBP)'),
+}
+
+_FUTURES_MONTHS = {
+    'F': 'janeiro', 'G': 'fevereiro', 'H': 'março',    'J': 'abril',
+    'K': 'maio',    'M': 'junho',     'N': 'julho',     'Q': 'agosto',
+    'U': 'setembro','V': 'outubro',   'X': 'novembro',  'Z': 'dezembro',
+}
+
+
+def _futures_info(ticker: str) -> dict | None:
+    """Retorna info do contrato futuro ou None se não for futuro."""
+    m = _FUTURES_RE.match(ticker.upper())
+    if not m:
+        return None
+    prefix, month_code, year = m.group(1), m.group(2), m.group(3)
+    search_term, display_name = None, None
+    for length in (len(prefix), 3, 2):
+        entry = _FUTURES_MAP.get(prefix[:length])
+        if entry:
+            search_term, display_name = entry
+            break
+    if not search_term:
+        search_term = prefix.lower()
+        display_name = f"futuro {prefix}"
+    return {
+        'underlying': display_name,
+        'search_term': search_term,
+        'month': _FUTURES_MONTHS.get(month_code, month_code),
+        'year': f"20{year}",
+        'expiry': f"{_FUTURES_MONTHS.get(month_code, month_code)}/20{year}",
+    }
+
+
+def futures_search_term(ticker: str) -> str | None:
+    """Retorna o termo de busca do ativo subjacente, ou None se não for futuro."""
+    info = _futures_info(ticker)
+    return info['search_term'] if info else None
 
 
 def _fmt_quote(quote: dict) -> str:
@@ -129,7 +193,21 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
         else '"retail_summary": ""'
     )
 
-    user_message = f"""## {data.company_name} ({data.ticker})
+    futures = _futures_info(data.ticker)
+    if futures:
+        futures_block = (
+            f"\n### Contrato futuro\n"
+            f"Ticker: {data.ticker} | Ativo subjacente: **{futures['underlying']}** "
+            f"| Vencimento: {futures['expiry']}\n"
+            f"Analise o ATIVO SUBJACENTE ({futures['underlying']}), não o contrato em si. "
+            f"Inclua: dinâmica de oferta/demanda, fatores macro (Fed, inflação, geopolítica), "
+            f"impacto cambial BRL/USD para o investidor brasileiro, e perspectiva de preço "
+            f"para o vencimento em {futures['expiry']}."
+        )
+    else:
+        futures_block = ""
+
+    user_message = f"""## {data.company_name} ({data.ticker}){futures_block}
 
 ### Cotação
 {quote_line}
