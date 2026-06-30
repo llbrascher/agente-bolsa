@@ -11,17 +11,24 @@ logger = logging.getLogger(__name__)
 
 client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-SYSTEM_PROMPT = """Você é um analista de mercado de capitais brasileiro especializado em ações da B3
-e em commodities e derivativos negociados na B3.
-Seu papel é interpretar dados de cotação, notícias e sentimento de mercado, e produzir um resumo
-claro, objetivo e útil para um investidor de varejo acompanhar suas posições.
+SYSTEM_PROMPT = """Você é um analista sênior de uma gestora de ativos brasileira de primeira linha.
+Sua função não é compilar notícias — é entregar inteligência acionável para um gestor de carteira.
 
-Para contratos futuros: analise o ATIVO SUBJACENTE (commodity, índice ou câmbio), não o contrato
-em si. Inclua perspectivas de oferta/demanda, fatores macroeconômicos e impacto cambial quando
-relevante para o investidor brasileiro.
+Princípios:
+• Interprete, não descreva: explique o que os dados SIGNIFICAM para o preço, não o que aconteceu.
+• Causa e efeito: por que cada fator importa para este ativo agora?
+• Posicionamento claro: tome um viés direcional fundamentado, sem omitir a lógica.
+• Corte o ruído: se uma informação não move preço, não a inclua.
+• Dados insuficientes: mencione em uma linha e complete com contexto macro/setorial relevante.
 
-Seja direto. Use linguagem acessível, mas precisa. Não invente informações que não estejam nos dados.
-Se não houver dados suficientes em alguma seção, diga isso claramente."""
+Para CONTRATOS FUTUROS (ticker no padrão letras+mês+ano):
+  — Analise EXCLUSIVAMENTE o ativo subjacente (commodity, índice, câmbio).
+  — Ignore completamente o contrato, ticker, vencimento, liquidez ou mecânica do derivativo.
+  — Inclua: macro global, oferta/demanda do ativo, impacto cambial BRL/USD para o investidor.
+
+Para AÇÕES:
+  — Vá além do press release: contextualize no ciclo da empresa e do setor.
+  — Identifique se o evento já está precificado ou se há assimetria residual."""
 
 # Padrão de ticker futuro da B3: prefixo de letras + código de mês + 2 dígitos do ano
 _FUTURES_RE = re.compile(r'^([A-Z]{2,5})([FGHJKMNQUVXZ])(\d{2})$')
@@ -175,76 +182,95 @@ class SummaryResult:
     ticker: str
     company_name: str
     quote_line: str
-    institutional_summary: str
+    cenario: str
+    catalisadores: str
+    riscos: str
+    vies: str
+    monitorar: str
     retail_summary: str
-    full_text: str
     sentiment: str = "neutro"  # "positivo", "neutro" ou "negativo"
 
 
-async def summarize_company(data: CompanyData) -> SummaryResult:
-    quote_line = _fmt_quote(data.quote or {})
+def _build_user_message(data: CompanyData, quote_line: str) -> str:
+    futures = _futures_info(data.ticker)
 
-    has_retail = data.has_retail_data
+    if futures:
+        header = (
+            f"## {futures['underlying']}\n"
+            f"Instrumento: contrato futuro {data.ticker} — analise APENAS o ativo subjacente."
+        )
+        context_instruction = (
+            f'Contexto obrigatório para "{futures["underlying"]}":\n'
+            f"• Macro global: Fed, inflação, dólar (DXY), apetite por risco\n"
+            f"• Oferta e demanda física/financeira do ativo\n"
+            f"• Impacto cambial BRL/USD para o investidor brasileiro\n"
+            f"• NÃO mencione o contrato, o ticker {data.ticker}, vencimento ou liquidez"
+        )
+    else:
+        header = f"## {data.company_name} ({data.ticker})"
+        context_instruction = (
+            f"Contexto para análise de {data.company_name} ({data.ticker}):\n"
+            f"• Posicione os fatos no ciclo atual da empresa e do setor\n"
+            f"• Identifique se eventos já estão precificados ou há assimetria residual\n"
+            f"• Destaque catalisadores específicos com datas quando conhecidas"
+        )
+
     retail_instruction = (
-        'Preencha "retail_summary" com 1-3 parágrafos sobre o sentimento do varejo '
-        "(Reddit, YouTube, Google Trends). Destaque: tom predominante (otimista/pessimista), "
-        "temas recorrentes, volume de discussão."
-        if has_retail
+        '"retail_summary": "<1-2 parágrafos: tom do varejo, o que sinaliza sobre fluxo de '
+        'pequeno investidor e se diverge ou confirma a análise institucional>"'
+        if data.has_retail_data
         else '"retail_summary": ""'
     )
 
-    futures = _futures_info(data.ticker)
-    if futures:
-        futures_block = (
-            f"\n### Contrato futuro\n"
-            f"Ticker: {data.ticker} | Ativo subjacente: **{futures['underlying']}** "
-            f"| Vencimento: {futures['expiry']}\n"
-            f"Analise o ATIVO SUBJACENTE ({futures['underlying']}), não o contrato em si. "
-            f"Inclua: dinâmica de oferta/demanda, fatores macro (Fed, inflação, geopolítica), "
-            f"impacto cambial BRL/USD para o investidor brasileiro, e perspectiva de preço "
-            f"para o vencimento em {futures['expiry']}."
-        )
-    else:
-        futures_block = ""
-
-    user_message = f"""## {data.company_name} ({data.ticker}){futures_block}
+    return f"""{header}
 
 ### Cotação
 {quote_line}
 
-### Notícias institucionais (Google News)
+### Informações disponíveis
+
+Notícias (Google News):
 {_fmt_news(data.news)}
 
-### Busca aprofundada (Tavily)
+Busca aprofundada (Tavily):
 {_fmt_tavily(data.tavily_items)}
 
-### Newsletters financeiras (Substack)
+Newsletters (Substack):
 {_fmt_substack(data.substack_items)}
 
-### Reddit (comunidades de investimento BR)
+Reddit:
 {_fmt_reddit(data.reddit_items)}
 
-### YouTube (análises recentes)
+YouTube:
 {_fmt_youtube(data.youtube_items)}
 
-### Google Trends (últimos 7 dias, Brasil)
+Google Trends:
 {_fmt_trends(data.trends_data)}
 
 ---
 
-Gere um resumo seguindo EXATAMENTE esta estrutura JSON:
+{context_instruction}
+
+Produza EXATAMENTE este JSON — sem markdown, sem texto fora do JSON:
 
 {{
-  "sentiment": "<uma palavra: positivo, neutro ou negativo — avaliação geral do conjunto de notícias para o acionista>",
-  "institutional_summary": "<2-4 parágrafos analisando notícias e busca Tavily. Destaque: o que move o preço, resultados, fatos relevantes, riscos.>",
-  "{retail_instruction}"
-}}
+  "sentiment": "<positivo | neutro | negativo>",
+  "cenario": "<2 parágrafos MAX: o que está acontecendo neste mercado e por que isso move o preço agora. Seja interpretativo, não descritivo.>",
+  "catalisadores": "<bullets separados por \\n de catalisadores concretos de ALTA e de BAIXA com mecanismo de impacto. Ex: '↑ Fed dovish: juros reais negativos sustentam demanda por proteção\\n↓ DXY acima de 105: pressão sobre commodities em USD'>",
+  "riscos": "<1 parágrafo: o principal risco que invalidaria o cenário atual e como identificá-lo>",
+  "vies": "<1 parágrafo: direção analítica clara (alta/baixa/lateral), por quê, e o que confirmaria ou negaria essa tese>",
+  "monitorar": "<lista de 3-5 itens específicos: eventos com datas, dados econômicos, níveis de preço ou indicadores a acompanhar>",
+  {retail_instruction}
+}}"""
 
-Responda APENAS com o JSON, sem markdown, sem texto fora do JSON."""
+
+async def summarize_company(data: CompanyData) -> SummaryResult:
+    quote_line = _fmt_quote(data.quote or {})
+    user_message = _build_user_message(data, quote_line)
 
     response = client.messages.create(
         model=settings.claude_model,
-        max_tokens=1500,
+        max_tokens=2000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )
@@ -254,24 +280,21 @@ Responda APENAS com o JSON, sem markdown, sem texto fora do JSON."""
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        logger.warning("[summarizer] JSON inválido para %s, usando texto bruto", data.ticker)
-        parsed = {"institutional_summary": raw, "retail_summary": ""}
+        logger.warning("[summarizer] JSON inválido para %s, usando fallback", data.ticker)
+        parsed = {"cenario": raw, "catalisadores": "", "riscos": "", "vies": "", "monitorar": "", "retail_summary": ""}
 
-    institutional = parsed.get("institutional_summary", "Resumo indisponível.")
-    retail = parsed.get("retail_summary", "")
     raw_sentiment = parsed.get("sentiment", "neutro").lower().strip()
     sentiment = raw_sentiment if raw_sentiment in {"positivo", "neutro", "negativo"} else "neutro"
-
-    full_text = f"{quote_line}\n\n{institutional}"
-    if retail:
-        full_text += f"\n\n**Sentimento do Varejo**\n{retail}"
 
     return SummaryResult(
         ticker=data.ticker,
         company_name=data.company_name,
         quote_line=quote_line,
-        institutional_summary=institutional,
-        retail_summary=retail,
-        full_text=full_text,
+        cenario=parsed.get("cenario", "Análise indisponível."),
+        catalisadores=parsed.get("catalisadores", ""),
+        riscos=parsed.get("riscos", ""),
+        vies=parsed.get("vies", ""),
+        monitorar=parsed.get("monitorar", ""),
+        retail_summary=parsed.get("retail_summary", ""),
         sentiment=sentiment,
     )
