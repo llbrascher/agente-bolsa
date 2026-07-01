@@ -293,6 +293,12 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
 
     raw = response.content[0].text.strip()
 
+    # Remove markdown code fences that Claude sometimes adds despite instructions
+    if raw.startswith("```"):
+        raw = re.sub(r'^```(?:json)?\s*', '', raw)
+        raw = re.sub(r'\s*```$', '', raw)
+        raw = raw.strip()
+
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
