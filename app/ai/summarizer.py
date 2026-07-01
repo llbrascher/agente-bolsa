@@ -12,44 +12,54 @@ logger = logging.getLogger(__name__)
 client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 SYSTEM_PROMPT = """Você é um analista sênior de uma gestora de ativos brasileira de primeira linha.
-Sua função não é compilar notícias — é entregar inteligência acionável para um gestor de carteira.
+Sua função é transformar dados brutos em inteligência acionável — não resumir o que outros já disseram.
 
-Princípios:
-• Interprete, não descreva: explique o que os dados SIGNIFICAM para o preço, não o que aconteceu.
-• Causa e efeito: por que cada fator importa para este ativo agora?
-• Posicionamento claro: tome um viés direcional fundamentado, sem omitir a lógica.
-• Corte o ruído: se uma informação não move preço, não a inclua.
-• Dados insuficientes: mencione em uma linha e complete com contexto macro/setorial relevante.
+═══ REGRAS ABSOLUTAS ═══
 
-Para CONTRATOS FUTUROS (ticker no padrão letras+mês+ano):
-  — Analise EXCLUSIVAMENTE o ativo subjacente (commodity, índice, câmbio).
-  — Ignore completamente o contrato, ticker, vencimento, liquidez ou mecânica do derivativo.
-  — Inclua: macro global, oferta/demanda do ativo, impacto cambial BRL/USD para o investidor.
+PROIBIDO:
+• Citar ou parafrasear analistas, bancos ou casas de análise externas por nome (XP, Genial, Goldman, etc.)
+• Usar as frases "analistas destacam", "segundo especialistas", "de acordo com", "mercado acredita"
+• Descrever eventos sem extrair implicação para o preço ("A empresa reportou X" sem concluir nada)
+• Para FUTUROS: qualquer menção a ETFs, produtos B3, volumes de bolsa, liquidez do contrato ou ticker
+
+OBRIGATÓRIO:
+• Toda conclusão deve derivar dos dados fornecidos — raciocine, não relay
+• Para cada fato relevante: explicite o mecanismo de transmissão ao preço ("X implica Y porque Z")
+• Catalisadores: nomear evento + mecanismo de impacto + magnitude esperada quando possível
+• Viés: posicionamento claro (alta/baixa/lateral) com a lógica completa — sem hedge vazio
+• Dados insuficientes: assuma contexto macro/setorial de conhecimento próprio, não paralise
+
+Para CONTRATOS FUTUROS:
+  Analise EXCLUSIVAMENTE o ativo subjacente no mercado global.
+  O leitor sabe que opera um futuro — não mencione o instrumento, a B3 ou qualquer produto local.
+  Framework obrigatório: (1) drivers macro globais, (2) oferta/demanda física, (3) posicionamento de
+  mercado/especulativo, (4) impacto do câmbio BRL/USD para o investidor brasileiro.
 
 Para AÇÕES:
-  — Vá além do press release: contextualize no ciclo da empresa e do setor.
-  — Identifique se o evento já está precificado ou se há assimetria residual."""
+  Parta dos fatos, construa a tese. Quantifique impacto quando possível.
+  Identifique se eventos já estão no preço ou se há assimetria não capturada pelo mercado."""
 
 # Padrão de ticker futuro da B3: prefixo de letras + código de mês + 2 dígitos do ano
 _FUTURES_RE = re.compile(r'^([A-Z]{2,5})([FGHJKMNQUVXZ])(\d{2})$')
 
-# prefixo → (termo de busca, nome para exibição)
+# prefixo → (termo de busca global, nome para exibição)
+# Termos de busca focados em fundamentos globais do ativo, NÃO em produtos/volumes da B3
 _FUTURES_MAP: dict[str, tuple[str, str]] = {
-    'GLD':  ('ouro gold mercados',          'Ouro (Gold)'),
-    'OZ':   ('ouro B3',                     'Ouro à vista B3'),
-    'WIN':  ('Ibovespa índice futuro',       'Ibovespa Mini (WIN)'),
-    'IND':  ('Ibovespa índice futuro',       'Ibovespa Índice (IND)'),
-    'WDO':  ('dólar real câmbio futuro',     'Mini Dólar (WDO)'),
-    'DOL':  ('dólar real câmbio futuro',     'Dólar Futuro (DOL)'),
-    'BGI':  ('boi gordo pecuária futuro',    'Boi Gordo (BGI)'),
-    'ICF':  ('café arábica commodity',       'Café Arábica (ICF)'),
-    'CCM':  ('milho commodity grãos',        'Milho (CCM)'),
-    'SJC':  ('soja commodity grãos',         'Soja (SJC)'),
-    'ACF':  ('açúcar commodity',             'Açúcar Cristal (ACF)'),
-    'ETH':  ('etanol combustível',           'Etanol (ETH)'),
-    'ISP':  ('S&P 500 bolsa americana',      'S&P 500 (ISP)'),
-    'EUR':  ('euro câmbio moeda',            'Euro (EUR)'),
-    'GBP':  ('libra câmbio moeda',           'Libra Esterlina (GBP)'),
+    'GLD':  ('gold price inflation Fed central banks demand XAU',  'Ouro (Gold)'),
+    'OZ':   ('gold price inflation Fed central banks demand XAU',  'Ouro (Gold)'),
+    'WIN':  ('Ibovespa resultados empresas Brasil macro fiscal',    'Ibovespa'),
+    'IND':  ('Ibovespa resultados empresas Brasil macro fiscal',    'Ibovespa'),
+    'WDO':  ('dólar real câmbio Brasil Fed juros DXY',             'Dólar/Real (USD/BRL)'),
+    'DOL':  ('dólar real câmbio Brasil Fed juros DXY',             'Dólar/Real (USD/BRL)'),
+    'BGI':  ('boi gordo preço arroba pecuária exportação carne',   'Boi Gordo'),
+    'ICF':  ('café arábica preço internacional Colombia safra',     'Café Arábica'),
+    'CCM':  ('milho preço grãos safra Estados Unidos China demanda','Milho'),
+    'SJC':  ('soja preço internacional safra Brasil Estados Unidos','Soja'),
+    'ACF':  ('açúcar preço internacional safra Brasil India',       'Açúcar Cristal'),
+    'ETH':  ('etanol preço combustível cana Brasil ANP',            'Etanol'),
+    'ISP':  ('S&P 500 earnings Fed economy US macro',              'S&P 500'),
+    'EUR':  ('euro dólar ECB inflação Europa câmbio',               'Euro/Dólar'),
+    'GBP':  ('libra dólar Bank of England inflação Reino Unido',    'Libra Esterlina'),
 }
 
 _FUTURES_MONTHS = {
@@ -195,24 +205,29 @@ def _build_user_message(data: CompanyData, quote_line: str) -> str:
     futures = _futures_info(data.ticker)
 
     if futures:
-        header = (
-            f"## {futures['underlying']}\n"
-            f"Instrumento: contrato futuro {data.ticker} — analise APENAS o ativo subjacente."
-        )
+        header = f"## {futures['underlying']} — análise de ativo subjacente"
         context_instruction = (
-            f'Contexto obrigatório para "{futures["underlying"]}":\n'
-            f"• Macro global: Fed, inflação, dólar (DXY), apetite por risco\n"
-            f"• Oferta e demanda física/financeira do ativo\n"
-            f"• Impacto cambial BRL/USD para o investidor brasileiro\n"
-            f"• NÃO mencione o contrato, o ticker {data.ticker}, vencimento ou liquidez"
+            f"ATIVO A ANALISAR: {futures['underlying']} no mercado global.\n\n"
+            f"DESCARTE qualquer dado abaixo que se refira a: ETFs, produtos de bolsa, volumes "
+            f"negociados em bolsa, contratos listados, liquidez de instrumento ou B3. "
+            f"Esses dados são irrelevantes — use apenas informações sobre o ativo no mercado global.\n\n"
+            f"Framework de análise obrigatório:\n"
+            f"1. Drivers macro globais: política monetária (Fed, bancos centrais), inflação, DXY, apetite por risco\n"
+            f"2. Fundamentos físicos: oferta, demanda, estoques, sazonalidade\n"
+            f"3. Posicionamento especulativo: COT report, sentimento de mercado global\n"
+            f"4. Ângulo brasileiro: impacto cambial BRL/USD, como o real amplifica ou atenua o movimento"
         )
     else:
         header = f"## {data.company_name} ({data.ticker})"
         context_instruction = (
-            f"Contexto para análise de {data.company_name} ({data.ticker}):\n"
-            f"• Posicione os fatos no ciclo atual da empresa e do setor\n"
-            f"• Identifique se eventos já estão precificados ou há assimetria residual\n"
-            f"• Destaque catalisadores específicos com datas quando conhecidas"
+            f"ATIVO A ANALISAR: {data.company_name} ({data.ticker}).\n\n"
+            f"Parta dos fatos, construa a tese. Para cada dado relevante, explicite o mecanismo de "
+            f"transmissão ao preço. Não repita o que analistas de terceiros disseram — raciocine "
+            f"diretamente sobre os dados.\n\n"
+            f"Identifique:\n"
+            f"1. O fator dominante que está movendo (ou vai mover) o papel\n"
+            f"2. Se eventos recentes já estão precificados ou há assimetria residual\n"
+            f"3. O próximo catalisador concreto com data quando conhecida"
         )
 
     retail_instruction = (
@@ -251,15 +266,16 @@ Google Trends:
 
 {context_instruction}
 
-Produza EXATAMENTE este JSON — sem markdown, sem texto fora do JSON:
+Produza EXATAMENTE este JSON — sem markdown, sem texto fora do JSON.
+Lembre: raciocine sobre os dados, nunca cite analistas externos pelo nome; cada campo deve ter conclusão própria.
 
 {{
-  "sentiment": "<positivo | neutro | negativo>",
-  "cenario": "<2 parágrafos MAX: o que está acontecendo neste mercado e por que isso move o preço agora. Seja interpretativo, não descritivo.>",
-  "catalisadores": "<bullets separados por \\n de catalisadores concretos de ALTA e de BAIXA com mecanismo de impacto. Ex: '↑ Fed dovish: juros reais negativos sustentam demanda por proteção\\n↓ DXY acima de 105: pressão sobre commodities em USD'>",
-  "riscos": "<1 parágrafo: o principal risco que invalidaria o cenário atual e como identificá-lo>",
-  "vies": "<1 parágrafo: direção analítica clara (alta/baixa/lateral), por quê, e o que confirmaria ou negaria essa tese>",
-  "monitorar": "<lista de 3-5 itens específicos: eventos com datas, dados econômicos, níveis de preço ou indicadores a acompanhar>",
+  "sentiment": "<positivo | neutro | negativo — balanço geral de risco/retorno>",
+  "cenario": "<2 parágrafos: qual a narrativa dominante AGORA e por que ela sustenta ou pressiona o preço. Explicite o mecanismo, não apenas o evento.>",
+  "catalisadores": "<um bullet por linha: '↑ [evento]: [mecanismo de impacto]' para alta e '↓ [evento]: [mecanismo]' para baixa. Mínimo 2 de cada quando existirem.>",
+  "riscos": "<1 parágrafo: o que invalidaria o cenário, qual o sinal antecipado e impacto esperado no preço>",
+  "vies": "<ALTA / BAIXA / LATERAL + lógica em 2-3 frases. O que confirmaria e o que negaria a tese.>",
+  "monitorar": "<3-5 itens acionáveis: datas de eventos, níveis de preço, dados econômicos ou indicadores concretos>",
   {retail_instruction}
 }}"""
 
