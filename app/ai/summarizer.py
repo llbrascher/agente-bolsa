@@ -158,6 +158,83 @@ def _fmt_trends(data: dict | None) -> str:
     return "\n".join(lines) if lines else "Sem dados."
 
 
+def _fmt_fundamentals(fd: dict | None, is_futures: bool = False) -> str:
+    if not fd:
+        return "Indisponível."
+
+    lines = []
+    cur = fd.get("current_price")
+    w52h = fd.get("week_52_high")
+    w52l = fd.get("week_52_low")
+
+    if is_futures:
+        # Para futuros: preço do ativo subjacente no mercado global
+        yf = fd.get("yf_ticker", "")
+        if cur:
+            lines.append(f"Preço atual ({yf}): {cur:,.2f}")
+        if w52h and w52l:
+            lines.append(f"Range 52 semanas: {w52l:,.2f} – {w52h:,.2f}")
+            if cur:
+                pct_h = fd.get("pct_from_52h")
+                pct_l = fd.get("pct_from_52l")
+                if pct_h is not None and pct_l is not None:
+                    lines.append(
+                        f"Posição: {pct_h:+.1f}% do topo de 52 sem. | {pct_l:+.1f}% do fundo"
+                    )
+        return "\n".join(lines) if lines else "Indisponível."
+
+    # Para ações: dados fundamentalistas completos
+    rec_map = {
+        "strong_buy": "COMPRA FORTE", "buy": "COMPRA", "hold": "NEUTRO",
+        "sell": "VENDA", "strong_sell": "VENDA FORTE",
+    }
+    rec = rec_map.get(fd.get("recommendation", ""), "")
+    n   = fd.get("n_analysts")
+    tgt = fd.get("target_mean")
+    upside = fd.get("upside_pct")
+
+    if tgt and upside is not None:
+        analyst_line = f"Consenso ({n} analistas): {rec} | Preço-alvo médio: {tgt:.2f}"
+        if fd.get("target_low") and fd.get("target_high"):
+            analyst_line += f" (range: {fd['target_low']:.2f} – {fd['target_high']:.2f})"
+        analyst_line += f" → {upside:+.1f}% vs. preço atual"
+        lines.append(analyst_line)
+
+    mult = []
+    if fd.get("trailing_pe"):
+        mult.append(f"P/L: {fd['trailing_pe']:.1f}x")
+    if fd.get("forward_pe"):
+        mult.append(f"P/L fwd: {fd['forward_pe']:.1f}x")
+    if fd.get("ev_ebitda"):
+        mult.append(f"EV/EBITDA: {fd['ev_ebitda']:.1f}x")
+    if fd.get("price_to_book"):
+        mult.append(f"P/VP: {fd['price_to_book']:.1f}x")
+    if mult:
+        lines.append("Múltiplos: " + " | ".join(mult))
+
+    extras = []
+    if fd.get("dividend_yield"):
+        extras.append(f"DY: {fd['dividend_yield']*100:.1f}%")
+    if fd.get("ebitda_margins"):
+        extras.append(f"Mg. EBITDA: {fd['ebitda_margins']*100:.1f}%")
+    if fd.get("debt_to_equity"):
+        extras.append(f"Dívida/PL: {fd['debt_to_equity']:.1f}x")
+    if fd.get("return_on_equity"):
+        extras.append(f"ROE: {fd['return_on_equity']*100:.1f}%")
+    if extras:
+        lines.append(" | ".join(extras))
+
+    if w52h and w52l:
+        range_line = f"Range 52 sem.: {w52l:.2f} – {w52h:.2f}"
+        pct_h = fd.get("pct_from_52h")
+        pct_l = fd.get("pct_from_52l")
+        if pct_h is not None and pct_l is not None:
+            range_line += f" | atual: {pct_h:+.1f}% do topo, {pct_l:+.1f}% do fundo"
+        lines.append(range_line)
+
+    return "\n".join(lines) if lines else "Indisponível."
+
+
 def _fmt_substack(items: list[dict]) -> str:
     if not items:
         return "Nenhuma menção em newsletters monitoradas."
@@ -174,6 +251,7 @@ class CompanyData:
     ticker: str
     company_name: str
     quote: dict | None = None
+    fundamental_data: dict | None = None
     news: list[dict] = field(default_factory=list)
     tavily_items: list[dict] = field(default_factory=list)
     reddit_items: list[dict] = field(default_factory=list)
@@ -203,48 +281,53 @@ class SummaryResult:
 
 def _build_user_message(data: CompanyData, quote_line: str) -> str:
     futures = _futures_info(data.ticker)
+    is_futures = futures is not None
 
-    if futures:
-        header = f"## {futures['underlying']} — análise de ativo subjacente"
-        context_instruction = (
-            f"ATIVO A ANALISAR: {futures['underlying']} no mercado global.\n\n"
-            f"DESCARTE qualquer dado abaixo que se refira a: ETFs, produtos de bolsa, volumes "
-            f"negociados em bolsa, contratos listados, liquidez de instrumento ou B3. "
-            f"Esses dados são irrelevantes — use apenas informações sobre o ativo no mercado global.\n\n"
-            f"Framework de análise obrigatório:\n"
-            f"1. Drivers macro globais: política monetária (Fed, bancos centrais), inflação, DXY, apetite por risco\n"
-            f"2. Fundamentos físicos: oferta, demanda, estoques, sazonalidade\n"
-            f"3. Posicionamento especulativo: COT report, sentimento de mercado global\n"
-            f"4. Ângulo brasileiro: impacto cambial BRL/USD, como o real amplifica ou atenua o movimento"
+    # --- cabeçalho e instruções específicas por tipo de ativo ---
+    if is_futures:
+        underlying = futures["underlying"]
+        header = f"## {underlying}"
+        etapa1_instrucao = (
+            f"Com base nos dados de mercado acima, avalie onde o {underlying} está em termos históricos "
+            f"(% do range 52 semanas) e o que isso implica para o risco/retorno da posição atual."
+        )
+        etapa2_instrucao = (
+            f"Identifique o driver macro primário do {underlying} agora "
+            f"(política monetária, inflação, DXY, oferta/demanda física, geopolítica) e sua direção. "
+            f"DESCARTE qualquer dado sobre ETFs, produtos B3 ou volumes de bolsa — irrelevante."
+        )
+        etapa3_instrucao = (
+            f"Com base no range 52 semanas e no preço atual, classifique: tendência (alta/baixa/lateral), "
+            f"nível relativo (próximo do topo / meio do range / próximo do fundo) e o que isso implica "
+            f"para o timing de entrada/saída."
         )
     else:
         header = f"## {data.company_name} ({data.ticker})"
-        context_instruction = (
-            f"ATIVO A ANALISAR: {data.company_name} ({data.ticker}).\n\n"
-            f"Parta dos fatos, construa a tese. Para cada dado relevante, explicite o mecanismo de "
-            f"transmissão ao preço. Não repita o que analistas de terceiros disseram — raciocine "
-            f"diretamente sobre os dados.\n\n"
-            f"Identifique:\n"
-            f"1. O fator dominante que está movendo (ou vai mover) o papel\n"
-            f"2. Se eventos recentes já estão precificados ou há assimetria residual\n"
-            f"3. O próximo catalisador concreto com data quando conhecida"
+        etapa1_instrucao = (
+            f"Com base no preço-alvo de consenso e nos múltiplos acima, calcule o upside/downside implícito "
+            f"e diga se o papel está caro, justo ou barato vs. histórico e peers. "
+            f"Mencione a entrega operacional mais recente que explica esse múltiplo."
+        )
+        etapa2_instrucao = (
+            f"Identifique o fator setorial que mais move {data.company_name} "
+            f"(ex: Brent para petroleiras, minério para mineradoras, Selic para bancos) e diga qual a "
+            f"direção atual desse fator e o que ela implica para o resultado da empresa."
+        )
+        etapa3_instrucao = (
+            f"Com base no range 52 semanas e no preço atual de {quote_line}, diga se o papel está em "
+            f"tendência de alta ou baixa, e qual o suporte/resistência mais relevante no nível atual."
         )
 
     retail_instruction = (
-        '"retail_summary": "<1-2 parágrafos: tom do varejo, o que sinaliza sobre fluxo de '
-        'pequeno investidor e se diverge ou confirma a análise institucional>"'
+        '"retail_summary": "<1-2 parágrafos: tom do varejo, diverge ou confirma a análise fundamentalista? '
+        'Sinaliza fluxo de mãos fracas ou forte convicção?>"'
         if data.has_retail_data
         else '"retail_summary": ""'
     )
 
-    return f"""{header}
+    fd_formatted = _fmt_fundamentals(data.fundamental_data, is_futures=is_futures)
 
-### Cotação
-{quote_line}
-
-### Informações disponíveis
-
-Notícias (Google News):
+    newsflow = f"""Notícias (Google News):
 {_fmt_news(data.news)}
 
 Busca aprofundada (Tavily):
@@ -260,22 +343,44 @@ YouTube:
 {_fmt_youtube(data.youtube_items)}
 
 Google Trends:
-{_fmt_trends(data.trends_data)}
+{_fmt_trends(data.trends_data)}"""
+
+    return f"""{header}
+
+### Cotação atual
+{quote_line}
+
+### Dados de mercado (Yahoo Finance)
+{fd_formatted}
+
+### Newsflow recente
+{newsflow}
 
 ---
+Raciocine em sequência:
 
-{context_instruction}
+ETAPA 1 — VALUATION / POSICIONAMENTO HISTÓRICO
+{etapa1_instrucao}
 
-Produza EXATAMENTE este JSON — sem markdown, sem texto fora do JSON.
-Lembre: raciocine sobre os dados, nunca cite analistas externos pelo nome; cada campo deve ter conclusão própria.
+ETAPA 2 — DRIVER DE SETOR / MACRO
+{etapa2_instrucao}
+
+ETAPA 3 — TÉCNICA RÁPIDA
+{etapa3_instrucao}
+
+ETAPA 4 — NEWSFLOW COMO SINAL
+O newsflow acima confirma, contradiz ou é ruído em relação à tese fundamentalista?
+Só mencione o que altera a análise — ignore repetições e ruídos.
+
+Produza EXATAMENTE este JSON — sem markdown, sem texto fora do JSON:
 
 {{
-  "sentiment": "<positivo | neutro | negativo — balanço geral de risco/retorno>",
-  "cenario": "<2 parágrafos: qual a narrativa dominante AGORA e por que ela sustenta ou pressiona o preço. Explicite o mecanismo, não apenas o evento.>",
-  "catalisadores": "<um bullet por linha: '↑ [evento]: [mecanismo de impacto]' para alta e '↓ [evento]: [mecanismo]' para baixa. Mínimo 2 de cada quando existirem.>",
-  "riscos": "<1 parágrafo: o que invalidaria o cenário, qual o sinal antecipado e impacto esperado no preço>",
-  "vies": "<ALTA / BAIXA / LATERAL + lógica em 2-3 frases. O que confirmaria e o que negaria a tese.>",
-  "monitorar": "<3-5 itens acionáveis: datas de eventos, níveis de preço, dados econômicos ou indicadores concretos>",
+  "sentiment": "<positivo | neutro | negativo>",
+  "cenario": "<2 parágrafos MAX: síntese das etapas 1 e 2 — valuation + driver setorial/macro. Mecanismo, não evento.>",
+  "catalisadores": "<bullets, um por linha: '↑ [evento]: [mecanismo de impacto no preço]' e '↓ [evento]: [mecanismo]'>",
+  "riscos": "<1 parágrafo: o que invalida o cenário, o sinal que antecipa e o impacto esperado>",
+  "vies": "<ALTA / BAIXA / LATERAL — lógica em 2 frases integrando valuation + técnica + newsflow. O que confirmaria e o que negaria.>",
+  "monitorar": "<3-5 itens concretos: próximos dados econômicos com datas, níveis de preço críticos, eventos corporativos>",
   {retail_instruction}
 }}"""
 

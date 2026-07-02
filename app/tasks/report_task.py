@@ -21,6 +21,7 @@ from app.sources.trends import GoogleTrendsSource
 from app.sources.reddit import RedditSource
 from app.sources.substack import SubstackSource
 from app.sources.tavily import TavilySource
+from app.sources.yahoo_finance import YahooFinanceSource
 from app.sources.youtube import YouTubeSource
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Fontes institucionais (Camada 1)
 INSTITUTIONAL_SOURCES = [
     BrapiSource(),
+    YahooFinanceSource(),
     GoogleNewsSource(),
     TavilySource(),
     SubstackSource(),
@@ -51,6 +53,7 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
     results = await asyncio.gather(*[src.fetch(ticker, search_name) for src in ALL_SOURCES])
 
     quote = None
+    fundamental_data: dict | None = None
     news: list[dict] = []
     tavily_items: list[dict] = []
     reddit_items: list[dict] = []
@@ -66,6 +69,8 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
         match result.source_name:
             case "brapi":
                 quote = result.data
+            case "yahoo_finance":
+                fundamental_data = result.data
             case "google_news":
                 news = result.data.get("items", [])
             case "tavily":
@@ -83,6 +88,7 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
         ticker=ticker,
         company_name=company_name,
         quote=quote,
+        fundamental_data=fundamental_data,
         news=news,
         tavily_items=tavily_items,
         reddit_items=reddit_items,

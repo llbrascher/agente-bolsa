@@ -39,6 +39,7 @@ dependencies = [
     "google-api-python-client>=2.154",
     "youtube-transcript-api>=0.6",
     "pytrends>=4.9",
+    "yfinance>=0.2",
 
     # IA + E-mail
     "anthropic>=0.40",
