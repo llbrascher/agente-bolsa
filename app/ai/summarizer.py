@@ -158,6 +158,30 @@ def _fmt_trends(data: dict | None) -> str:
     return "\n".join(lines) if lines else "Sem dados."
 
 
+def _escape_json_newlines(s: str) -> str:
+    """Escapa newlines literais dentro de strings JSON — O(n), trata aspas escapadas."""
+    out, in_str = [], False
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == '\\' and in_str:          # sequência de escape — passa os dois chars
+            out.append(ch)
+            i += 1
+            if i < len(s):
+                out.append(s[i])
+        elif ch == '"':
+            in_str = not in_str
+            out.append(ch)
+        elif in_str and ch == '\n':
+            out.append('\\n')
+        elif in_str and ch == '\r':
+            pass                            # descarta \r dentro de strings
+        else:
+            out.append(ch)
+        i += 1
+    return ''.join(out)
+
+
 def _fmt_fundamentals(fd: dict | None, is_futures: bool = False) -> str:
     if not fd:
         return "Indisponível."
@@ -398,7 +422,7 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
 
     raw = response.content[0].text.strip()
 
-    # Remove markdown code fences that Claude sometimes adds despite instructions
+    # Remove markdown code fences que o Claude adiciona apesar da instrução
     if raw.startswith("```"):
         raw = re.sub(r'^```(?:json)?\s*', '', raw)
         raw = re.sub(r'\s*```$', '', raw)
@@ -407,8 +431,15 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        logger.warning("[summarizer] JSON inválido para %s, usando fallback", data.ticker)
-        parsed = {"cenario": raw, "catalisadores": "", "riscos": "", "vies": "", "monitorar": "", "retail_summary": ""}
+        # LLMs às vezes inserem newlines literais dentro de strings JSON (inválido).
+        # Percorremos o texto e escapamos newlines dentro de strings.
+        parsed = None
+        try:
+            parsed = json.loads(_escape_json_newlines(raw))
+        except json.JSONDecodeError:
+            logger.warning("[summarizer] JSON inválido para %s, usando fallback", data.ticker)
+        if parsed is None:
+            parsed = {"cenario": raw, "catalisadores": "", "riscos": "", "vies": "", "monitorar": "", "retail_summary": ""}
 
     raw_sentiment = parsed.get("sentiment", "neutro").lower().strip()
     sentiment = raw_sentiment if raw_sentiment in {"positivo", "neutro", "negativo"} else "neutro"
