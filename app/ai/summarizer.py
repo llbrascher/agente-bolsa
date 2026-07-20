@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, field
 
 import anthropic
+from json_repair import repair_json
 
 from app.config import settings
 
@@ -431,14 +432,13 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        # LLMs às vezes inserem newlines literais dentro de strings JSON (inválido).
-        # Percorremos o texto e escapamos newlines dentro de strings.
-        parsed = None
+        # json_repair corrige os problemas mais comuns de LLMs: newlines literais,
+        # aspas mal escapadas, trailing commas, chaves faltando, etc.
         try:
-            parsed = json.loads(_escape_json_newlines(raw))
-        except json.JSONDecodeError:
-            logger.warning("[summarizer] JSON inválido para %s, usando fallback", data.ticker)
-        if parsed is None:
+            parsed = json.loads(repair_json(raw))
+            logger.debug("[summarizer] JSON reparado para %s", data.ticker)
+        except Exception:
+            logger.warning("[summarizer] JSON irreparável para %s, usando fallback", data.ticker)
             parsed = {"cenario": raw, "catalisadores": "", "riscos": "", "vies": "", "monitorar": "", "retail_summary": ""}
 
     raw_sentiment = parsed.get("sentiment", "neutro").lower().strip()

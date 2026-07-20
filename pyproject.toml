@@ -40,6 +40,7 @@ dependencies = [
     "youtube-transcript-api>=0.6",
     "pytrends>=4.9",
     "yfinance>=0.2",
+    "json-repair>=0.30",
 
     # IA + E-mail
     "anthropic>=0.40",
