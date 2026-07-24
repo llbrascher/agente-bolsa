@@ -159,6 +159,15 @@ def _fmt_trends(data: dict | None) -> str:
     return "\n".join(lines) if lines else "Sem dados."
 
 
+def _fmt_ri(items: list[dict]) -> str:
+    if not items:
+        return "Nenhum fato relevante ou comunicado nos últimos 30 dias."
+    lines = []
+    for it in items:
+        lines.append(f"[{it['date']}] {it['category'].upper()}: {it['subject']}")
+    return "\n".join(lines)
+
+
 def _escape_json_newlines(s: str) -> str:
     """Escapa newlines literais dentro de strings JSON — O(n), trata aspas escapadas."""
     out, in_str = [], False
@@ -277,6 +286,7 @@ class CompanyData:
     company_name: str
     quote: dict | None = None
     fundamental_data: dict | None = None
+    ri_items: list[dict] = field(default_factory=list)
     news: list[dict] = field(default_factory=list)
     tavily_items: list[dict] = field(default_factory=list)
     reddit_items: list[dict] = field(default_factory=list)
@@ -302,6 +312,7 @@ class SummaryResult:
     monitorar: str
     retail_summary: str
     sentiment: str = "neutro"  # "positivo", "neutro" ou "negativo"
+    ri_items: list[dict] = field(default_factory=list)
 
 
 def _build_user_message(data: CompanyData, quote_line: str) -> str:
@@ -352,6 +363,13 @@ def _build_user_message(data: CompanyData, quote_line: str) -> str:
 
     fd_formatted = _fmt_fundamentals(data.fundamental_data, is_futures=is_futures)
 
+    ri_section = ""
+    if not is_futures:
+        ri_section = f"""
+### Fatos Relevantes e Comunicados — CVM (fonte primária)
+{_fmt_ri(data.ri_items)}
+"""
+
     newsflow = f"""Notícias (Google News):
 {_fmt_news(data.news)}
 
@@ -377,8 +395,8 @@ Google Trends:
 
 ### Dados de mercado (Yahoo Finance)
 {fd_formatted}
-
-### Newsflow recente
+{ri_section}
+### Newsflow de terceiros
 {newsflow}
 
 ---
@@ -393,9 +411,10 @@ ETAPA 2 — DRIVER DE SETOR / MACRO
 ETAPA 3 — TÉCNICA RÁPIDA
 {etapa3_instrucao}
 
-ETAPA 4 — NEWSFLOW COMO SINAL
-O newsflow acima confirma, contradiz ou é ruído em relação à tese fundamentalista?
-Só mencione o que altera a análise — ignore repetições e ruídos.
+ETAPA 4 — FATOS RELEVANTES E NEWSFLOW COMO SINAL
+Prioridade: Fatos Relevantes e Comunicados CVM são fonte primária — comunicação oficial da
+empresa. Analise-os primeiro. Só então use notícias de terceiros como complemento se trouxerem
+informação adicional. Ignore repetições e ruídos.
 
 Produza EXATAMENTE este JSON — sem markdown, sem texto fora do JSON:
 
@@ -455,4 +474,5 @@ async def summarize_company(data: CompanyData) -> SummaryResult:
         monitorar=parsed.get("monitorar", ""),
         retail_summary=parsed.get("retail_summary", ""),
         sentiment=sentiment,
+        ri_items=data.ri_items,
     )

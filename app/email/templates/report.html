@@ -104,6 +104,26 @@
       padding: 12px 16px; font-size: 13px; color: #92400e;
     }
     .warnings ul { padding-left: 16px; margin-top: 4px; }
+
+    /* CVM RI section */
+    .section-ri .section-label { color: #b91c1c; }
+    .ri-list { list-style: none; padding: 0; margin: 0; }
+    .ri-list li {
+      padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px;
+    }
+    .ri-list li:last-child { border-bottom: none; }
+    .ri-tag {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      background: #fee2e2; color: #b91c1c;
+      border-radius: 4px; padding: 2px 6px; margin-right: 6px;
+    }
+    .ri-tag-comunicado {
+      background: #fef3c7; color: #92400e;
+    }
+    .ri-date { color: #9ca3af; font-size: 12px; margin-left: 6px; }
+    .ri-link { color: #1d4ed8; text-decoration: none; }
+    .ri-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -140,6 +160,29 @@
       <div class="section section-catalisadores">
         <div class="section-label">Catalisadores</div>
         <div class="section-body">{{ s.catalisadores }}</div>
+      </div>
+      {% endif %}
+
+      {% if s.ri_items %}
+      <div class="section section-ri">
+        <div class="section-label">📋 Fatos Relevantes e Comunicados — CVM</div>
+        <ul class="ri-list">
+          {% for item in s.ri_items %}
+          <li>
+            {% if item.category == 'Fato Relevante' %}
+            <span class="ri-tag">Fato Relevante</span>
+            {% else %}
+            <span class="ri-tag ri-tag-comunicado">{{ item.category }}</span>
+            {% endif %}
+            {% if item.link %}
+            <a class="ri-link" href="{{ item.link }}" target="_blank">{{ item.subject }}</a>
+            {% else %}
+            {{ item.subject }}
+            {% endif %}
+            <span class="ri-date">{{ item.date }}</span>
+          </li>
+          {% endfor %}
+        </ul>
       </div>
       {% endif %}
 

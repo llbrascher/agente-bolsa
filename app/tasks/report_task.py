@@ -16,6 +16,7 @@ from app.ai.summarizer import CompanyData, summarize_company, futures_search_ter
 from app.email.sender import send_report
 from app.models.report import Report
 from app.sources.brapi import BrapiSource
+from app.sources.cvm_ri import CvmRiSource
 from app.sources.google_news import GoogleNewsSource
 from app.sources.trends import GoogleTrendsSource
 from app.sources.reddit import RedditSource
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 INSTITUTIONAL_SOURCES = [
     BrapiSource(),
     YahooFinanceSource(),
+    CvmRiSource(),
     GoogleNewsSource(),
     TavilySource(),
     SubstackSource(),
@@ -54,6 +56,7 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
 
     quote = None
     fundamental_data: dict | None = None
+    ri_items: list[dict] = []
     news: list[dict] = []
     tavily_items: list[dict] = []
     reddit_items: list[dict] = []
@@ -71,6 +74,8 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
                 quote = result.data
             case "yahoo_finance":
                 fundamental_data = result.data
+            case "cvm_ri":
+                ri_items = result.data.get("items", [])
             case "google_news":
                 news = result.data.get("items", [])
             case "tavily":
@@ -89,6 +94,7 @@ async def _collect_company(ticker: str, company_name: str) -> tuple[CompanyData,
         company_name=company_name,
         quote=quote,
         fundamental_data=fundamental_data,
+        ri_items=ri_items,
         news=news,
         tavily_items=tavily_items,
         reddit_items=reddit_items,
